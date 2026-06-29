@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
-export default function JoinPage() {
+function JoinContent() {
   const params = useSearchParams()
   const router = useRouter()
   const token = params.get('token')
@@ -100,5 +100,13 @@ export default function JoinPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function JoinPage() {
+  return (
+    <Suspense>
+      <JoinContent />
+    </Suspense>
   )
 }
