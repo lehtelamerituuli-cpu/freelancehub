@@ -4,6 +4,10 @@ import { NextRequest } from 'next/server'
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 export async function POST(req: NextRequest) {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return new Response('ANTHROPIC_API_KEY puuttuu', { status: 500 })
+  }
+
   try {
     const { messages, projectData } = await req.json()
 
@@ -35,8 +39,8 @@ export async function POST(req: NextRequest) {
               controller.enqueue(encoder.encode(event.delta.text))
             }
           }
-        } catch (err) {
-          controller.error(err)
+        } catch (err: any) {
+          controller.enqueue(encoder.encode(`\n\n[Virhe: ${err?.message || 'Tuntematon virhe'}]`))
         } finally {
           controller.close()
         }
