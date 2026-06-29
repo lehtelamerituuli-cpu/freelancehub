@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #09090f;
+  --surface: #111120;
+  --surface-raised: #16162a;
+  --border: #1c1c30;
+  --border-subtle: #0f0f1c;
+  --text: #eeeeff;
+  --text-soft: #ddddf0;
+  --text-heading: #c0c0e0;
+  --muted: #5e5e80;
+  --muted-strong: #42425e;
+  --faint: #35354f;
+  --faint-strong: #3a3a5a;
+  --sidebar-bg: #0c0c17;
+  --sidebar-border: #17172a;
+  --color-scheme: dark;
+
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-space-grotesk), system-ui, sans-serif;
+  color-scheme: var(--color-scheme, dark);
+}
+
+input, select, textarea {
+  color-scheme: var(--color-scheme, dark);
+}
+
+@keyframes fh-pulse {
+  0%, 100% { opacity: 0.3; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+@media (max-width: 767px) {
+  .mob-hide { display: none !important; }
+  .mob-card-grid { grid-template-columns: repeat(2, 1fr) !important; }
+  .mob-stack { grid-template-columns: 1fr !important; }
+}
