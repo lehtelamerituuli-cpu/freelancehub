@@ -21,6 +21,9 @@ export default function Time() {
   const [timerStart, setTimerStart] = useState<number | null>(null)
   const [timerSeconds, setTimerSeconds] = useState(0)
   const [projectRates, setProjectRates] = useState<Record<string, number>>({})
+  const [filterProject, setFilterProject] = useState('')
+  const [filterDateFrom, setFilterDateFrom] = useState('')
+  const [filterDateTo, setFilterDateTo] = useState('')
   const isMobile = useIsMobile()
 
   const TIMER_KEY = 'fh_timer'
@@ -113,8 +116,16 @@ export default function Time() {
     fontSize: 13, fontFamily: 'system-ui', boxSizing: 'border-box',
   }
 
-  const totalHours = entries.reduce((s, e) => s + e.hours, 0)
-  const totalRevenue = entries.reduce((s, e) => s + e.hours * e.rate, 0)
+  const filtered = entries.filter(e => {
+    if (filterProject && e.project_id !== filterProject) return false
+    if (filterDateFrom && e.date < filterDateFrom) return false
+    if (filterDateTo && e.date > filterDateTo) return false
+    return true
+  })
+
+  const totalHours = filtered.reduce((s, e) => s + e.hours, 0)
+  const totalRevenue = filtered.reduce((s, e) => s + e.hours * e.rate, 0)
+  const hasFilter = !!(filterProject || filterDateFrom || filterDateTo)
 
   return (
     <div style={{display: 'flex', minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: 'system-ui,sans-serif'}}>
@@ -202,6 +213,26 @@ export default function Time() {
           </div>
         )}
 
+        {/* Filter bar */}
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: '14px 18px', marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+          <select value={filterProject} onChange={e => setFilterProject(e.target.value)} style={{ ...inp, width: 'auto', minWidth: 140 }}>
+            <option value="">Kaikki projektit</option>
+            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} style={{ ...inp, width: 'auto' }} title="Alkupäivä" />
+          <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} style={{ ...inp, width: 'auto' }} title="Loppupäivä" />
+          {hasFilter && (
+            <button onClick={() => { setFilterProject(''); setFilterDateFrom(''); setFilterDateTo('') }} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 14px', color: 'var(--muted)', fontSize: 12, cursor: 'pointer' }}>
+              Tyhjennä suodatin
+            </button>
+          )}
+          {hasFilter && (
+            <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--muted)' }}>
+              {filtered.length}/{entries.length} kirjausta · {totalHours.toFixed(1)} h · {totalRevenue.toFixed(0)} €
+            </span>
+          )}
+        </div>
+
         <div style={{background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden'}}>
           {entries.length === 0 ? (
             <div style={{padding: '48px', textAlign: 'center', color: 'var(--faint)', fontSize: 14}}>Ei kirjauksia vielä.</div>
@@ -223,7 +254,7 @@ export default function Time() {
                 </tr>
               </thead>
               <tbody>
-                {entries.map(e => (
+                {filtered.map(e => (
                   <tr key={e.id} style={{borderBottom: '1px solid var(--border-subtle)'}}>
                     <td style={{padding: '13px 18px', color: 'var(--muted)'}}>{e.date}</td>
                     <td style={{padding: '13px 18px', fontWeight: 600, color: 'var(--text-soft)'}}>{e.projects?.name}</td>

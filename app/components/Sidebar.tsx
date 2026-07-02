@@ -58,6 +58,13 @@ const IconUsers = () => (
     <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
   </svg>
 )
+const IconHistory = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="1 4 1 10 7 10"/>
+    <path d="M3.51 15a9 9 0 1 0 .49-4.5"/>
+    <polyline points="12 7 12 12 16 14"/>
+  </svg>
+)
 const IconMenu = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
@@ -96,6 +103,7 @@ const NAV = [
   { href: '/travel',       label: 'Matkat',            Icon: IconMapPin },
   { href: '/expenses',     label: 'Kulut',             Icon: IconReceipt },
   { href: '/laskutus',     label: 'Laskutus',          Icon: IconFileText },
+  { href: '/invoices',     label: 'Laskuhistoria',      Icon: IconHistory },
   { href: '/receipts',     label: 'Kuitit',            Icon: IconCamera },
   { href: '/tax',          label: 'Verotus',           Icon: IconPieChart },
   { href: '/team',         label: 'Tiimi',              Icon: IconUsers },
@@ -148,6 +156,11 @@ export function Sidebar({ user, onLogout }: { user: any; onLogout: () => void })
   const [activeTheme, setActiveTheme] = useState<'dark' | 'light'>('dark')
   const [isMobile, setIsMobile] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [pwSection, setPwSection] = useState(false)
+  const [newPw, setNewPw] = useState('')
+  const [newPw2, setNewPw2] = useState('')
+  const [pwMsg, setPwMsg] = useState('')
+  const [pwLoading, setPwLoading] = useState(false)
 
   useEffect(() => {
     const check = () => {
@@ -169,6 +182,18 @@ export function Sidebar({ user, onLogout }: { user: any; onLogout: () => void })
       applyVars(theme === 'light' ? LIGHT_VARS : DARK_VARS)
     } catch {}
   }, [])
+
+  async function changePassword() {
+    if (newPw !== newPw2) { setPwMsg('Salasanat eivät täsmää'); return }
+    if (newPw.length < 6) { setPwMsg('Salasanan tulee olla vähintään 6 merkkiä'); return }
+    setPwLoading(true); setPwMsg('')
+    const { createClient } = await import('@supabase/supabase-js')
+    const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
+    const { error } = await sb.auth.updateUser({ password: newPw })
+    setPwLoading(false)
+    if (error) { setPwMsg('Virhe: ' + error.message) }
+    else { setPwMsg('Salasana vaihdettu!'); setNewPw(''); setNewPw2(''); setTimeout(() => setPwSection(false), 1500) }
+  }
 
   function selectTheme(theme: 'dark' | 'light') {
     applyVars(theme === 'light' ? LIGHT_VARS : DARK_VARS)
@@ -375,7 +400,26 @@ export function Sidebar({ user, onLogout }: { user: any; onLogout: () => void })
               </div>
             </div>
 
-            <div style={{ height: 1, background: 'var(--border)', margin: '4px 0 20px' }} />
+            <div style={{ height: 1, background: 'var(--border)', margin: '4px 0 16px' }} />
+
+            <button
+              onClick={() => { setPwSection(v => !v); setPwMsg('') }}
+              style={{ width: '100%', padding: '10px', borderRadius: 10, background: 'var(--surface-raised)', border: '1px solid var(--border)', color: 'var(--text)', fontSize: 13, fontWeight: 600, cursor: 'pointer', marginBottom: 10, textAlign: 'left' }}
+            >
+              🔑 Vaihda salasana {pwSection ? '▲' : '▼'}
+            </button>
+            {pwSection && (
+              <div style={{ marginBottom: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <input type="password" value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="Uusi salasana" style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', fontSize: 13 }} />
+                <input type="password" value={newPw2} onChange={e => setNewPw2(e.target.value)} placeholder="Toista salasana" style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', fontSize: 13 }} onKeyDown={e => e.key === 'Enter' && changePassword()} />
+                <button onClick={changePassword} disabled={pwLoading} style={{ padding: '8px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>
+                  {pwLoading ? '...' : 'Vaihda salasana'}
+                </button>
+                {pwMsg && <p style={{ margin: 0, fontSize: 12, color: pwMsg.includes('Virhe') ? '#f87171' : '#34d399' }}>{pwMsg}</p>}
+              </div>
+            )}
+
+            <div style={{ height: 1, background: 'var(--border)', margin: '0 0 16px' }} />
 
             <button
               onClick={onLogout}

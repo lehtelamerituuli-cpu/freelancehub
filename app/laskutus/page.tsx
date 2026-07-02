@@ -27,6 +27,7 @@ export default function Laskutus() {
   const [sellerEmail, setSellerEmail] = useState('')
   const [sellerPhone, setSellerPhone] = useState('')
   const [sellerIban, setSellerIban] = useState('')
+  const [viite, setViite] = useState('')
 
   // Asiakkaan tiedot
   const [buyerName, setBuyerName] = useState('')
@@ -47,6 +48,9 @@ export default function Laskutus() {
     const dd = String(now.getDate()).padStart(2, '0')
     const ts = String(now.getTime()).slice(-3)
     setInvoiceNumber(`INV-${yy}${mm}${dd}-${ts}`)
+    // Laske suomalainen viitenumero
+    const base = `${yy}${mm}${dd}${ts}`
+    setViite(calcViite(base))
 
     try {
       const saved = localStorage.getItem(SELLER_KEY)
@@ -61,6 +65,17 @@ export default function Laskutus() {
       }
     } catch {}
   }, [])
+
+  function calcViite(base: string): string {
+    const digits = base.replace(/\D/g, '')
+    const weights = [7, 3, 1]
+    let sum = 0
+    for (let i = 0; i < digits.length; i++) {
+      sum += parseInt(digits[digits.length - 1 - i]) * weights[i % 3]
+    }
+    const tarkiste = (10 - (sum % 10)) % 10
+    return digits + tarkiste
+  }
 
   function saveSellerInfo() {
     try {
@@ -111,6 +126,22 @@ export default function Laskutus() {
   async function downloadPDF() {
     saveSellerInfo()
     setGenerating(true)
+    // Tallenna lasku tietokantaan
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session) {
+      await supabase.from('invoices').insert({
+        user_id: session.user.id,
+        invoice_number: invoiceNumber,
+        project_name: selectedProject ? selectedProject.name : 'Kaikki projektit',
+        buyer_name: buyerName,
+        buyer_ytunnus: buyerYtunnus,
+        total_netto: grandTotal,
+        total_vat: vatAmount,
+        total_brutto: grossTotal,
+        vat_rate: vatRate,
+        status: 'lähetetty',
+      })
+    }
     try {
       const { jsPDF } = await import('jspdf')
       const doc = new jsPDF()
@@ -275,12 +306,15 @@ export default function Laskutus() {
       y += 20
 
       // Maksutiedot
-      if (sellerIban) {
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(40, 40, 70)
-        doc.text('TILINUMERO', 20, y)
+      if (sellerIban || viite) {
+        doc.setFillColor(245, 243, 255)
+        doc.rect(20, y, 170, viite && sellerIban ? 20 : 14, 'F')
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(79, 46, 180)
+        doc.text('MAKSUTIEDOT', 25, y + 6)
         doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(20, 20, 50)
-        doc.text(sellerIban, 20, y + 6)
-        y += 14
+        if (sellerIban) { doc.text('IBAN: ' + sellerIban, 25, y + 13) }
+        if (viite) { doc.text('Viitenumero: ' + viite, sellerIban ? 110 : 25, y + 13) }
+        y += viite && sellerIban ? 26 : 20
       }
 
       // Alatunniste

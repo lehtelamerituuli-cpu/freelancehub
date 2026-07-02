@@ -78,6 +78,41 @@ export default function Tax() {
   const expensesByCategory = groupByCategory(expenseEntries)
   const receiptsByCategory = groupByCategory(receiptEntries)
 
+  async function downloadInvoicesCSV() {
+    const { data: invoices } = await supabase
+      .from('invoices')
+      .select('*')
+      .eq('user_id', user?.id)
+      .gte('created_at', `${selectedYear}-01-01`)
+      .lte('created_at', `${selectedYear}-12-31T23:59:59`)
+      .order('created_at')
+    const rows: string[][] = [
+      [`ProjektFlow laskut ${selectedYear}`],
+      [],
+      ['Päivämäärä', 'Laskunro', 'Asiakas', 'Projekti', 'Netto (€)', 'ALV (€)', 'Brutto (€)', 'ALV-%', 'Tila', 'Muistiinpano'],
+      ...(invoices || []).map(inv => [
+        new Date(inv.created_at).toLocaleDateString('fi-FI'),
+        inv.invoice_number || '',
+        inv.buyer_name || '',
+        inv.project_name || '',
+        Number(inv.total_netto || 0).toFixed(2),
+        Number(inv.total_vat || 0).toFixed(2),
+        Number(inv.total_brutto || 0).toFixed(2),
+        `${((inv.vat_rate || 0) * 100).toFixed(0)} %`,
+        inv.status || '',
+        inv.notes || '',
+      ]),
+    ]
+    const csv = rows.map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\r\n')
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `laskut-${selectedYear}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   function downloadCSV() {
     const rows: string[][] = [
       [`ProjektFlow verotusyhteenveto ${selectedYear}`],
@@ -184,7 +219,16 @@ export default function Tax() {
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                 <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
               </svg>
-              Lataa CSV
+              Kirjaukset CSV
+            </button>
+            <button
+              onClick={downloadInvoicesCSV}
+              style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 18px', color: 'var(--text-soft)', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+              </svg>
+              Laskut CSV
             </button>
           </div>
         </div>

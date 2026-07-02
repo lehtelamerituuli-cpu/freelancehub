@@ -86,6 +86,7 @@ export default function Dashboard() {
   const [expenseEntries, setExpenseEntries] = useState<any[]>([])
   const [filterMonth, setFilterMonth] = useState(now.getMonth())
   const [filterYear, setFilterYear] = useState(now.getFullYear())
+  const [unpaidInvoices, setUnpaidInvoices] = useState<any[]>([])
   const isMobile = useIsMobile()
 
   useEffect(() => {
@@ -97,11 +98,13 @@ export default function Dashboard() {
         supabase.from('time_entries').select('*').eq('user_id', data.user.id),
         supabase.from('travel_entries').select('*').eq('user_id', data.user.id),
         supabase.from('expenses').select('*').eq('user_id', data.user.id),
-      ]).then(([{ data: p }, { data: t }, { data: tr }, { data: ex }]) => {
+        supabase.from('invoices').select('id,invoice_number,buyer_name,total_brutto,created_at,status').eq('user_id', data.user.id).eq('status', 'lähetetty'),
+      ]).then(([{ data: p }, { data: t }, { data: tr }, { data: ex }, { data: inv }]) => {
         setProjects(p || [])
         setTimeEntries(t || [])
         setTravelEntries(tr || [])
         setExpenseEntries(ex || [])
+        setUnpaidInvoices(inv || [])
       })
     })
   }, [])
@@ -217,6 +220,49 @@ export default function Dashboard() {
             iconBg="rgba(251,146,60,0.12)" iconColor="#fb923c"
           />
         </div>
+
+        {/* Reminders */}
+        {(() => {
+          const deadlines = projects
+            .filter(p => p.deadline && p.status === 'active')
+            .map(p => ({ ...p, daysLeft: Math.ceil((new Date(p.deadline).getTime() - now.getTime()) / 86400000) }))
+            .filter(p => p.daysLeft >= 0 && p.daysLeft <= 7)
+            .sort((a, b) => a.daysLeft - b.daysLeft)
+          const overdueInvoices = unpaidInvoices.filter(inv => {
+            const daysSent = Math.floor((now.getTime() - new Date(inv.created_at).getTime()) / 86400000)
+            return daysSent >= 14
+          })
+          if (deadlines.length === 0 && overdueInvoices.length === 0) return null
+          return (
+            <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {deadlines.map(p => (
+                <div key={p.id} style={{ background: 'rgba(251,146,60,0.08)', border: '1px solid rgba(251,146,60,0.25)', borderRadius: 12, padding: '12px 18px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{ fontSize: 16 }}>⏰</span>
+                  <div style={{ flex: 1 }}>
+                    <span style={{ fontWeight: 600, color: 'var(--text-soft)', fontSize: 13 }}>{p.name}</span>
+                    <span style={{ color: 'var(--muted)', fontSize: 13 }}> — deadline </span>
+                    <span style={{ fontWeight: 600, color: p.daysLeft <= 2 ? '#f87171' : '#fb923c', fontSize: 13 }}>
+                      {p.daysLeft === 0 ? 'tänään!' : `${p.daysLeft} päivän päästä`}
+                    </span>
+                  </div>
+                  <Link href="/projects" style={{ fontSize: 12, color: '#fb923c', textDecoration: 'none' }}>Avaa →</Link>
+                </div>
+              ))}
+              {overdueInvoices.map(inv => (
+                <div key={inv.id} style={{ background: 'rgba(248,113,113,0.07)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: 12, padding: '12px 18px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{ fontSize: 16 }}>📋</span>
+                  <div style={{ flex: 1 }}>
+                    <span style={{ fontWeight: 600, color: 'var(--text-soft)', fontSize: 13 }}>Lasku #{inv.invoice_number}</span>
+                    {inv.buyer_name && <span style={{ color: 'var(--muted)', fontSize: 13 }}> · {inv.buyer_name}</span>}
+                    <span style={{ color: 'var(--muted)', fontSize: 13 }}> — </span>
+                    <span style={{ fontWeight: 600, color: '#f87171', fontSize: 13 }}>{inv.total_brutto.toFixed(2)} € maksamatta</span>
+                  </div>
+                  <Link href="/invoices" style={{ fontSize: 12, color: '#f87171', textDecoration: 'none' }}>Avaa →</Link>
+                </div>
+              ))}
+            </div>
+          )
+        })()}
 
         {/* Week summary */}
         <div style={{

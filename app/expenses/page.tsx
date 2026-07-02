@@ -31,6 +31,15 @@ export default function Expenses() {
   const [amount, setAmount] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [recurring, setRecurring] = useState<any[]>([])
+  const [showRecurring, setShowRecurring] = useState(false)
+  const [showRecurringForm, setShowRecurringForm] = useState(false)
+  const [recDesc, setRecDesc] = useState('')
+  const [recAmount, setRecAmount] = useState('')
+  const [recCategory, setRecCategory] = useState(CATEGORIES[0])
+  const [recFrequency, setRecFrequency] = useState('monthly')
+  const [recProjectId, setRecProjectId] = useState('')
+  const [recError, setRecError] = useState<string | null>(null)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -41,6 +50,7 @@ export default function Expenses() {
         if (d && d.length > 0) setProjectId(d[0].id)
       })
       loadEntries(data.user.id)
+      loadRecurring(data.user.id)
     })
   }, [])
 
@@ -56,6 +66,57 @@ export default function Expenses() {
       setError(null)
     }
     setEntries(data || [])
+  }
+
+  async function loadRecurring(uid: string) {
+    const { data } = await supabase.from('recurring_expenses').select('*, projects(name)').eq('user_id', uid).eq('active', true).order('created_at')
+    setRecurring(data || [])
+  }
+
+  async function addRecurring() {
+    if (!recAmount || !user) return
+    const nextDue = new Date()
+    if (recFrequency === 'weekly') nextDue.setDate(nextDue.getDate() + 7)
+    else if (recFrequency === 'monthly') nextDue.setMonth(nextDue.getMonth() + 1)
+    else if (recFrequency === 'quarterly') nextDue.setMonth(nextDue.getMonth() + 3)
+    else nextDue.setFullYear(nextDue.getFullYear() + 1)
+    const { error: err } = await supabase.from('recurring_expenses').insert({
+      user_id: user.id,
+      project_id: recProjectId || null,
+      category: recCategory,
+      description: recDesc,
+      amount: parseFloat(recAmount),
+      frequency: recFrequency,
+      next_due: nextDue.toISOString().split('T')[0],
+    })
+    if (err) { setRecError('Tallennusvirhe: ' + err.message); return }
+    setRecError(null)
+    setRecDesc(''); setRecAmount(''); setShowRecurringForm(false)
+    loadRecurring(user.id)
+  }
+
+  async function createFromRecurring(rec: any) {
+    await supabase.from('expenses').insert({
+      user_id: user.id,
+      project_id: rec.project_id || null,
+      date: new Date().toISOString().split('T')[0],
+      category: rec.category,
+      description: rec.description,
+      amount: rec.amount,
+    })
+    const next = new Date()
+    if (rec.frequency === 'weekly') next.setDate(next.getDate() + 7)
+    else if (rec.frequency === 'monthly') next.setMonth(next.getMonth() + 1)
+    else if (rec.frequency === 'quarterly') next.setMonth(next.getMonth() + 3)
+    else next.setFullYear(next.getFullYear() + 1)
+    await supabase.from('recurring_expenses').update({ next_due: next.toISOString().split('T')[0] }).eq('id', rec.id)
+    loadEntries(user.id)
+    loadRecurring(user.id)
+  }
+
+  async function deleteRecurring(id: string) {
+    await supabase.from('recurring_expenses').delete().eq('id', id)
+    loadRecurring(user.id)
   }
 
   async function addEntry() {
@@ -161,6 +222,97 @@ export default function Expenses() {
               )
             })() : <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--faint)' }}>—</div>}
           </div>
+        </div>
+
+        {/* Recurring expenses */}
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, marginBottom: 20 }}>
+          <button
+            onClick={() => setShowRecurring(v => !v)}
+            style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 22px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text)', fontSize: 13.5, fontWeight: 600 }}
+          >
+            <span>🔁 Toistuvat kulut {recurring.length > 0 && `(${recurring.length})`}</span>
+            <span style={{ color: 'var(--muted)', fontSize: 12 }}>{showRecurring ? '▲ Piilota' : '▼ Näytä'}</span>
+          </button>
+          {showRecurring && (
+            <div style={{ borderTop: '1px solid var(--border)', padding: '16px 22px' }}>
+              {recError && <div style={{ color: '#f87171', fontSize: 12.5, marginBottom: 12, padding: '8px 12px', background: 'rgba(248,113,113,0.08)', borderRadius: 8 }}>⚠ {recError}</div>}
+              {recurring.length === 0 && !showRecurringForm && (
+                <div style={{ color: 'var(--faint)', fontSize: 13, marginBottom: 12 }}>Ei toistuvia kuluja. Lisää ensimmäinen alla.</div>
+              )}
+              {recurring.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+                  {recurring.map(r => {
+                    const c = CAT_COLOR[r.category] || CAT_COLOR['Muu']
+                    const freqLabel: Record<string, string> = { weekly: 'Viikoittain', monthly: 'Kuukausittain', quarterly: 'Neljännesvuosittain', yearly: 'Vuosittain' }
+                    const daysUntil = r.next_due ? Math.ceil((new Date(r.next_due).getTime() - new Date().getTime()) / 86400000) : null
+                    return (
+                      <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'var(--bg)', borderRadius: 10, border: '1px solid var(--border-subtle)' }}>
+                        <span style={{ fontSize: 11.5, padding: '2px 8px', borderRadius: 20, fontWeight: 600, background: c.bg, color: c.text, border: `1px solid ${c.border}`, flexShrink: 0 }}>{r.category}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-soft)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.description || '—'}</div>
+                          <div style={{ fontSize: 11, color: 'var(--muted-strong)', marginTop: 2 }}>{freqLabel[r.frequency] || r.frequency} · {r.projects?.name || 'Ei projektia'}</div>
+                        </div>
+                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: '#f87171' }}>{Number(r.amount).toFixed(2)} €</div>
+                          {daysUntil !== null && (
+                            <div style={{ fontSize: 11, color: daysUntil <= 3 ? '#f87171' : 'var(--muted)', marginTop: 2 }}>
+                              {daysUntil <= 0 ? 'Erääntynyt!' : `${daysUntil} pv`}
+                            </div>
+                          )}
+                        </div>
+                        <button onClick={() => createFromRecurring(r)} style={{ background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.25)', borderRadius: 8, padding: '6px 12px', color: '#34d399', fontSize: 12, cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}>+ Luo nyt</button>
+                        <button onClick={() => deleteRecurring(r.id)} style={{ background: 'none', border: 'none', color: 'var(--faint)', cursor: 'pointer', fontSize: 16, padding: '0 4px' }} onMouseOver={e => (e.currentTarget.style.color = '#f87171')} onMouseOut={e => (e.currentTarget.style.color = 'var(--faint)')}>×</button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+              {showRecurringForm ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10 }}>
+                    <div>
+                      <label style={{ fontSize: 11.5, color: 'var(--muted-strong)', display: 'block', marginBottom: 5, fontWeight: 500 }}>Kuvaus</label>
+                      <input value={recDesc} onChange={e => setRecDesc(e.target.value)} style={inp} placeholder="esim. Pilvipalvelu" />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 11.5, color: 'var(--muted-strong)', display: 'block', marginBottom: 5, fontWeight: 500 }}>Summa (€) *</label>
+                      <input type="number" step="0.01" value={recAmount} onChange={e => setRecAmount(e.target.value)} style={inp} placeholder="0,00" />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 11.5, color: 'var(--muted-strong)', display: 'block', marginBottom: 5, fontWeight: 500 }}>Kategoria</label>
+                      <select value={recCategory} onChange={e => setRecCategory(e.target.value)} style={inp}>
+                        {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 11.5, color: 'var(--muted-strong)', display: 'block', marginBottom: 5, fontWeight: 500 }}>Toistuvuus</label>
+                      <select value={recFrequency} onChange={e => setRecFrequency(e.target.value)} style={inp}>
+                        <option value="weekly">Viikoittain</option>
+                        <option value="monthly">Kuukausittain</option>
+                        <option value="quarterly">Neljännesvuosittain</option>
+                        <option value="yearly">Vuosittain</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 11.5, color: 'var(--muted-strong)', display: 'block', marginBottom: 5, fontWeight: 500 }}>Projekti</label>
+                      <select value={recProjectId} onChange={e => setRecProjectId(e.target.value)} style={inp}>
+                        <option value="">— Ei projektia —</option>
+                        {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={addRecurring} disabled={!recAmount} style={{ background: recAmount ? 'linear-gradient(135deg,#7c3aed,#4f46e5)' : 'var(--surface-raised)', border: 'none', borderRadius: 8, padding: '9px 18px', color: recAmount ? '#fff' : 'var(--muted)', fontSize: 13, fontWeight: 600, cursor: recAmount ? 'pointer' : 'not-allowed' }}>Tallenna</button>
+                    <button onClick={() => setShowRecurringForm(false)} style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 16px', color: 'var(--muted)', fontSize: 13, cursor: 'pointer' }}>Peruuta</button>
+                  </div>
+                </div>
+              ) : (
+                <button onClick={() => setShowRecurringForm(true)} style={{ background: 'none', border: '1px dashed var(--border)', borderRadius: 8, padding: '8px 16px', color: 'var(--muted)', fontSize: 13, cursor: 'pointer', width: '100%' }}>
+                  + Lisää toistuva kulu
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Category breakdown */}
