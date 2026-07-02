@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { Sidebar } from '@/app/components/Sidebar'
 import { useIsMobile } from '@/app/hooks/useIsMobile'
+import { KM_RATE } from '@/lib/config'
 
 const COLORS = ['#7c3aed','#3b82f6','#10b981','#f59e0b','#ef4444','#ec4899','#14b8a6','#8b5cf6']
 
@@ -203,7 +204,7 @@ export default function Projects() {
     const pt  = timeEntries.filter(e => e.project_id === p.id)
     const ptr = travelEntries.filter(e => e.project_id === p.id)
     const pe  = expenseEntries.filter(e => e.project_id === p.id)
-    const revenue  = pt.reduce((s, e) => s + e.hours * e.rate, 0) + ptr.reduce((s, e) => s + e.km * 0.25, 0)
+    const revenue  = pt.reduce((s, e) => s + e.hours * e.rate, 0) + ptr.reduce((s, e) => s + e.km * KM_RATE, 0)
     const expenses = pe.reduce((s, e) => s + e.amount, 0)
     const totalUsed = revenue + expenses
     const progress = p.budget > 0 ? Math.min(totalUsed / p.budget * 100, 100) : 0
@@ -214,7 +215,7 @@ export default function Projects() {
   const activeCount = projects.filter(p => p.status === 'active').length
   const doneCount = projects.filter(p => p.status === 'valmis').length
   const totalBudget = projects.reduce((s, p) => s + (p.budget || 0), 0)
-  const totalRevenue = pw.reduce((s, p) => s + p.revenue, 0)
+  const totalRevenue = pw.reduce((s, p) => s + p.revenue + p.expenses, 0)
   const kateVals = pw.filter(p => p.kate !== null).map(p => p.kate as number)
   const avgKate = kateVals.length > 0 ? kateVals.reduce((s, v) => s + v, 0) / kateVals.length : null
   const budgetPct = totalBudget > 0 ? totalRevenue / totalBudget * 100 : 0
@@ -466,7 +467,7 @@ export default function Projects() {
                       </div>
                     </td>
                     <td style={{ padding: '14px 18px', color: 'var(--muted)' }}>{p.budget ? `${p.budget.toLocaleString('fi-FI')} €` : '—'}</td>
-                    <td className="mob-hide" style={{ padding: '14px 18px', color: 'var(--text-soft)', fontWeight: 500 }}>{p.revenue > 0 ? `${Math.round(p.revenue).toLocaleString('fi-FI')} €` : '—'}</td>
+                    <td className="mob-hide" style={{ padding: '14px 18px', color: 'var(--text-soft)', fontWeight: 500 }}>{(p.revenue + p.expenses) > 0 ? `${Math.round(p.revenue + p.expenses).toLocaleString('fi-FI')} €` : '—'}</td>
                     <td className="mob-hide" style={{ padding: '14px 18px' }}>
                       {p.kate !== null ? (
                         <span style={{ color: p.kate > 0 ? '#34d399' : '#f87171', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
